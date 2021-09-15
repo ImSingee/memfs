@@ -30,6 +30,12 @@ func New() billy.Filesystem {
 	return chroot.New(fs, string(separator))
 }
 
+//NewWithStorage returns a new Memory filesystem use custom storage backend
+func NewWithStorage(storage Storage) billy.Filesystem {
+	fs := &Memory{s: storage}
+	return chroot.New(fs, string(separator))
+}
+
 func (fs *Memory) Create(filename string) (billy.File, error) {
 	return fs.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 }
