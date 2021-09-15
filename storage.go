@@ -8,15 +8,27 @@ import (
 	"path/filepath"
 )
 
-type storage struct {
-	files    map[string]*file
-	children map[string]map[string]*file
+type Storage interface {
+	Has(path string) bool
+	Get(path string) (*File, bool)
+	MustGet(path string) *File
+	New(path string, mode os.FileMode, flag int) (*File, error)
+	Children(path string) []*File
+	Rename(from, to string) error
+	Remove(path string) error
 }
+
+type storage struct {
+	files    map[string]*File
+	children map[string]map[string]*File
+}
+
+var _ Storage = (*storage)(nil)
 
 func newStorage() *storage {
 	return &storage{
-		files:    make(map[string]*file, 0),
-		children: make(map[string]map[string]*file, 0),
+		files:    make(map[string]*File, 0),
+		children: make(map[string]map[string]*File, 0),
 	}
 }
 
@@ -27,11 +39,11 @@ func (s *storage) Has(path string) bool {
 	return ok
 }
 
-func (s *storage) New(path string, mode os.FileMode, flag int) (*file, error) {
+func (s *storage) New(path string, mode os.FileMode, flag int) (*File, error) {
 	path = clean(path)
 	if s.Has(path) {
 		if !s.MustGet(path).mode.IsDir() {
-			return nil, fmt.Errorf("file already exists %q", path)
+			return nil, fmt.Errorf("File already exists %q", path)
 		}
 
 		return nil, nil
@@ -39,7 +51,7 @@ func (s *storage) New(path string, mode os.FileMode, flag int) (*file, error) {
 
 	name := filepath.Base(path)
 
-	f := &file{
+	f := &File{
 		name:    name,
 		content: &content{name: name},
 		mode:    mode,
@@ -51,7 +63,7 @@ func (s *storage) New(path string, mode os.FileMode, flag int) (*file, error) {
 	return f, nil
 }
 
-func (s *storage) createParent(path string, mode os.FileMode, f *file) error {
+func (s *storage) createParent(path string, mode os.FileMode, f *File) error {
 	base := filepath.Dir(path)
 	base = clean(base)
 	if f.Name() == string(separator) {
@@ -63,17 +75,17 @@ func (s *storage) createParent(path string, mode os.FileMode, f *file) error {
 	}
 
 	if _, ok := s.children[base]; !ok {
-		s.children[base] = make(map[string]*file, 0)
+		s.children[base] = make(map[string]*File, 0)
 	}
 
 	s.children[base][f.Name()] = f
 	return nil
 }
 
-func (s *storage) Children(path string) []*file {
+func (s *storage) Children(path string) []*File {
 	path = clean(path)
 
-	l := make([]*file, 0)
+	l := make([]*File, 0)
 	for _, f := range s.children[path] {
 		l = append(l, f)
 	}
@@ -81,7 +93,7 @@ func (s *storage) Children(path string) []*file {
 	return l
 }
 
-func (s *storage) MustGet(path string) *file {
+func (s *storage) MustGet(path string) *File {
 	f, ok := s.Get(path)
 	if !ok {
 		panic(fmt.Errorf("couldn't find %q", path))
@@ -90,7 +102,7 @@ func (s *storage) MustGet(path string) *file {
 	return f
 }
 
-func (s *storage) Get(path string) (*file, bool) {
+func (s *storage) Get(path string) (*File, bool) {
 	path = clean(path)
 	if !s.Has(path) {
 		return nil, false
