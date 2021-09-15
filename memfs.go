@@ -26,7 +26,7 @@ type Memory struct {
 
 //New returns a new Memory filesystem.
 func New() billy.Filesystem {
-	fs := &Memory{s: newStorage()}
+	fs := &Memory{s: NewMemoryStorage()}
 	return chroot.New(fs, string(separator))
 }
 
@@ -106,7 +106,7 @@ func (fs *Memory) Stat(filename string) (os.FileInfo, error) {
 	}
 
 	// the name of the File should always the name of the stated File, so we
-	// overwrite the Stat returned from the storage with it, since the
+	// overwrite the Stat returned from the memoryStorage with it, since the
 	// filename may belong to a link.
 	fi.(*FileInfo).name = filepath.Base(filename)
 	return fi, nil
