@@ -61,21 +61,21 @@ func (fs *Memory) OpenFile(filename string, flag int, perm os.FileMode) (billy.F
 			return nil, os.ErrExist
 		}
 
-		if target, isLink := fs.resolveLink(filename, f); isLink {
+		if target, isLink := fs.resolveLink(filename, f.(*file)); isLink {
 			return fs.OpenFile(target, flag, perm)
 		}
 	}
 
-	if f.mode.IsDir() {
+	if f.(*file).mode.IsDir() {
 		return nil, fmt.Errorf("cannot open directory: %s", filename)
 	}
 
-	return f.Duplicate(filename, perm, flag), nil
+	return f.(*file).Duplicate(filename, perm, flag), nil
 }
 
 var errNotLink = errors.New("not a link")
 
-func (fs *Memory) resolveLink(fullpath string, f *File) (target string, isLink bool) {
+func (fs *Memory) resolveLink(fullpath string, f *file) (target string, isLink bool) {
 	if !isSymlink(f.mode) {
 		return fullpath, false
 	}
@@ -101,17 +101,17 @@ func (fs *Memory) Stat(filename string) (os.FileInfo, error) {
 		return nil, os.ErrNotExist
 	}
 
-	fi, _ := f.Stat()
+	fi, _ := f.(*file).Stat()
 
 	var err error
-	if target, isLink := fs.resolveLink(filename, f); isLink {
+	if target, isLink := fs.resolveLink(filename, f.(*file)); isLink {
 		fi, err = fs.Stat(target)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// the name of the File should always the name of the stated File, so we
+	// the name of the file should always the name of the stated file, so we
 	// overwrite the Stat returned from the memoryStorage with it, since the
 	// filename may belong to a link.
 	fi.(*FileInfo).name = filepath.Base(filename)
@@ -124,7 +124,7 @@ func (fs *Memory) Lstat(filename string) (os.FileInfo, error) {
 		return nil, os.ErrNotExist
 	}
 
-	return f.Stat()
+	return f.(*file).Stat()
 }
 
 type ByName []os.FileInfo
@@ -135,14 +135,14 @@ func (a ByName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 func (fs *Memory) ReadDir(path string) ([]os.FileInfo, error) {
 	if f, has := fs.s.Get(path); has {
-		if target, isLink := fs.resolveLink(path, f); isLink {
+		if target, isLink := fs.resolveLink(path, f.(*file)); isLink {
 			return fs.ReadDir(target)
 		}
 	}
 
 	var entries []os.FileInfo
 	for _, f := range fs.s.Children(path) {
-		fi, _ := f.Stat()
+		fi, _ := f.(*file).Stat()
 		entries = append(entries, fi)
 	}
 
@@ -197,7 +197,7 @@ func (fs *Memory) Readlink(link string) (string, error) {
 		return "", os.ErrNotExist
 	}
 
-	if !isSymlink(f.mode) {
+	if !isSymlink(f.(*file).mode) {
 		return "", &os.PathError{
 			Op:   "readlink",
 			Path: link,
@@ -205,7 +205,7 @@ func (fs *Memory) Readlink(link string) (string, error) {
 		}
 	}
 
-	return string(f.content.bytes), nil
+	return string(f.(*file).content.bytes), nil
 }
 
 // Capabilities implements the Capable interface.

@@ -4,19 +4,21 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/go-git/go-billy/v5"
 )
 
 type memoryStorage struct {
-	files    map[string]*File
-	children map[string]map[string]*File
+	files    map[string]*file
+	children map[string]map[string]*file
 }
 
 var _ Storage = (*memoryStorage)(nil)
 
 func NewMemoryStorage() Storage {
 	return &memoryStorage{
-		files:    make(map[string]*File, 0),
-		children: make(map[string]map[string]*File, 0),
+		files:    make(map[string]*file, 0),
+		children: make(map[string]map[string]*file, 0),
 	}
 }
 
@@ -27,11 +29,14 @@ func (s *memoryStorage) Has(path string) bool {
 	return ok
 }
 
-func (s *memoryStorage) New(path string, mode os.FileMode, flag int) (*File, error) {
+func (s *memoryStorage) New(path string, mode os.FileMode, flag int) (billy.File, error) {
 	path = clean(path)
-	if s.Has(path) {
-		if !s.MustGet(path).mode.IsDir() {
-			return nil, fmt.Errorf("File already exists %q", path)
+
+	if file_, ok := s.Get(path); ok {
+		f := file_.(*file)
+
+		if !f.mode.IsDir() {
+			return nil, fmt.Errorf("file already exists %q", path)
 		}
 
 		return nil, nil
@@ -39,7 +44,7 @@ func (s *memoryStorage) New(path string, mode os.FileMode, flag int) (*File, err
 
 	name := filepath.Base(path)
 
-	f := &File{
+	f := &file{
 		name:    name,
 		content: &content{name: name},
 		mode:    mode,
@@ -51,7 +56,7 @@ func (s *memoryStorage) New(path string, mode os.FileMode, flag int) (*File, err
 	return f, nil
 }
 
-func (s *memoryStorage) createParent(path string, mode os.FileMode, f *File) error {
+func (s *memoryStorage) createParent(path string, mode os.FileMode, f *file) error {
 	base := filepath.Dir(path)
 	base = clean(base)
 	if f.Name() == string(separator) {
@@ -63,17 +68,17 @@ func (s *memoryStorage) createParent(path string, mode os.FileMode, f *File) err
 	}
 
 	if _, ok := s.children[base]; !ok {
-		s.children[base] = make(map[string]*File, 0)
+		s.children[base] = make(map[string]*file, 0)
 	}
 
 	s.children[base][f.Name()] = f
 	return nil
 }
 
-func (s *memoryStorage) Children(path string) []*File {
+func (s *memoryStorage) Children(path string) []billy.File {
 	path = clean(path)
 
-	l := make([]*File, 0)
+	l := make([]billy.File, 0)
 	for _, f := range s.children[path] {
 		l = append(l, f)
 	}
@@ -81,7 +86,7 @@ func (s *memoryStorage) Children(path string) []*File {
 	return l
 }
 
-func (s *memoryStorage) MustGet(path string) *File {
+func (s *memoryStorage) MustGet(path string) billy.File {
 	f, ok := s.Get(path)
 	if !ok {
 		panic(fmt.Errorf("couldn't find %q", path))
@@ -90,7 +95,7 @@ func (s *memoryStorage) MustGet(path string) *File {
 	return f
 }
 
-func (s *memoryStorage) Get(path string) (*File, bool) {
+func (s *memoryStorage) Get(path string) (billy.File, bool) {
 	path = clean(path)
 	if !s.Has(path) {
 		return nil, false
@@ -150,10 +155,11 @@ func (s *memoryStorage) move(from, to string) error {
 func (s *memoryStorage) Remove(path string) error {
 	path = clean(path)
 
-	f, has := s.Get(path)
+	f_, has := s.Get(path)
 	if !has {
 		return os.ErrNotExist
 	}
+	f := f_.(*file)
 
 	if f.mode.IsDir() && len(s.children[path]) != 0 {
 		return fmt.Errorf("dir: %s contains files", path)

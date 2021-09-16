@@ -8,7 +8,7 @@ import (
 	"github.com/go-git/go-billy/v5"
 )
 
-type File struct {
+type file struct {
 	name     string
 	content  *content
 	position int64
@@ -18,13 +18,13 @@ type File struct {
 	isClosed bool
 }
 
-var _ billy.File = (*File)(nil)
+var _ billy.File = (*file)(nil)
 
-func (f *File) Name() string {
+func (f *file) Name() string {
 	return f.name
 }
 
-func (f *File) Read(b []byte) (int, error) {
+func (f *file) Read(b []byte) (int, error) {
 	n, err := f.ReadAt(b, f.position)
 	f.position += int64(n)
 
@@ -35,7 +35,7 @@ func (f *File) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func (f *File) ReadAt(b []byte, off int64) (int, error) {
+func (f *file) ReadAt(b []byte, off int64) (int, error) {
 	if f.isClosed {
 		return 0, os.ErrClosed
 	}
@@ -49,7 +49,7 @@ func (f *File) ReadAt(b []byte, off int64) (int, error) {
 	return n, err
 }
 
-func (f *File) Seek(offset int64, whence int) (int64, error) {
+func (f *file) Seek(offset int64, whence int) (int64, error) {
 	if f.isClosed {
 		return 0, os.ErrClosed
 	}
@@ -66,7 +66,7 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 	return f.position, nil
 }
 
-func (f *File) Write(p []byte) (int, error) {
+func (f *file) Write(p []byte) (int, error) {
 	if f.isClosed {
 		return 0, os.ErrClosed
 	}
@@ -81,7 +81,7 @@ func (f *File) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func (f *File) Close() error {
+func (f *file) Close() error {
 	if f.isClosed {
 		return os.ErrClosed
 	}
@@ -90,7 +90,7 @@ func (f *File) Close() error {
 	return nil
 }
 
-func (f *File) Truncate(size int64) error {
+func (f *file) Truncate(size int64) error {
 	if size < int64(len(f.content.bytes)) {
 		f.content.bytes = f.content.bytes[:size]
 	} else if more := int(size) - len(f.content.bytes); more > 0 {
@@ -100,8 +100,8 @@ func (f *File) Truncate(size int64) error {
 	return nil
 }
 
-func (f *File) Duplicate(filename string, mode os.FileMode, flag int) billy.File {
-	newFile := &File{
+func (f *file) Duplicate(filename string, mode os.FileMode, flag int) billy.File {
+	newFile := &file{
 		name:    filename,
 		content: f.content,
 		mode:    mode,
@@ -119,7 +119,7 @@ func (f *File) Duplicate(filename string, mode os.FileMode, flag int) billy.File
 	return newFile
 }
 
-func (f *File) Stat() (os.FileInfo, error) {
+func (f *file) Stat() (os.FileInfo, error) {
 	return &FileInfo{
 		name: f.Name(),
 		mode: f.mode,
@@ -128,12 +128,12 @@ func (f *File) Stat() (os.FileInfo, error) {
 }
 
 // Lock is a no-op in memfs.
-func (f *File) Lock() error {
+func (f *file) Lock() error {
 	return nil
 }
 
 // Unlock is a no-op in memfs.
-func (f *File) Unlock() error {
+func (f *file) Unlock() error {
 	return nil
 }
 
